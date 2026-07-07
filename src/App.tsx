@@ -208,9 +208,9 @@ function App() {
       buckets.set(bucketKey, d);
     });
 
-    return Array.from(buckets.values())
-      .map(d => ({
-        time: parseISO(d.timestamp).getTime(),
+    return Array.from(buckets.entries())
+      .map(([bucketKey, d]) => ({
+        time: viewMode === 'day' ? bucketKey : parseISO(d.timestamp).getTime(),
         count: d.count
       }))
       .sort((a,b) => a.time - b.time);
