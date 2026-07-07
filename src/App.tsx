@@ -17,7 +17,7 @@ import './index.css';
 declare const __BUILD_TIME__: string;
 
 // 전체 임직원 수 설정 (추후 수정 가능)
-const TOTAL_EMPLOYEES = 11149;
+const TOTAL_EMPLOYEES = 11287;
 
 // Types
 type DataPoint = {
