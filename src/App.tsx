@@ -81,6 +81,9 @@ function App() {
   const [history, setHistory] = useState<DataPoint[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>('minute');
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  
+  const [activeUsers, setActiveUsers] = useState<number>(0);
+  const [totalViews, setTotalViews] = useState<number>(0);
 
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -132,9 +135,43 @@ function App() {
     
     fetchData(true);
     
-    // Poll every 1 minute
+    // Poll every 1 minute for history
     const intervalId = setInterval(() => fetchData(), 60000);
     return () => clearInterval(intervalId);
+  }, []);
+
+  // Ping for active users
+  useEffect(() => {
+    let sessionId = sessionStorage.getItem('sds_union_session_id');
+    if (!sessionId) {
+      sessionId = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2);
+      sessionStorage.setItem('sds_union_session_id', sessionId);
+    }
+
+    const hasVisited = localStorage.getItem('sds_union_visited');
+    const isNewVisit = !hasVisited;
+    if (isNewVisit) {
+      localStorage.setItem('sds_union_visited', 'true');
+    }
+
+    const ping = async (isNew: boolean) => {
+      try {
+        const res = await fetch(`/api/ping?sessionId=${sessionId}&isNewVisit=${isNew}`);
+        if (res.ok) {
+          const data = await res.json();
+          setActiveUsers(data.activeUsers);
+          setTotalViews(data.totalViews);
+        }
+      } catch (err) {
+        console.error('Ping failed', err);
+      }
+    };
+
+    ping(isNewVisit);
+    
+    // Poll every 15 seconds
+    const pingIntervalId = setInterval(() => ping(false), 15000);
+    return () => clearInterval(pingIntervalId);
   }, []);
 
   // Process data based on view mode
@@ -282,6 +319,16 @@ function App() {
             >
               <RefreshCw size={16} className={isRefreshing ? 'animate-spin' : ''} />
             </button>
+          </div>
+          
+          <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(255,107,107,0.1)', color: 'var(--primary-color)', padding: '6px 14px', borderRadius: '20px', fontSize: '0.9rem', fontWeight: 700, letterSpacing: '-0.5px' }}>
+              <span className="status-dot" style={{ backgroundColor: 'var(--primary-color)', animation: 'pulse-primary 2s infinite' }}></span>
+              현재 접속자 {activeUsers}명
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(132,94,194,0.1)', color: 'var(--secondary-color)', padding: '6px 14px', borderRadius: '20px', fontSize: '0.9rem', fontWeight: 700, letterSpacing: '-0.5px' }}>
+              👁️ 누적 방문 {totalViews.toLocaleString()}명
+            </div>
           </div>
         </div>
 
