@@ -21,9 +21,9 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Failed to fetch external data' });
   }
 
-  const { totalMemberCount } = apiResponse;
-  if (typeof totalMemberCount !== 'number') {
-    return res.status(500).json({ error: 'Invalid data format from API' });
+  const { memberCount } = apiResponse;
+  if (typeof memberCount !== 'number') {
+    return res.status(500).json({ error: 'Invalid data format from API', apiResponse });
   }
 
   const timestamp = new Date().toISOString();
@@ -37,11 +37,11 @@ export default async function handler(req, res) {
     await client.connect();
     await client.query(
       'INSERT INTO member_counts (timestamp, count) VALUES ($1, $2)',
-      [timestamp, totalMemberCount]
+      [timestamp, memberCount]
     );
     await client.end();
     
-    return res.status(200).json({ success: true, timestamp, count: totalMemberCount });
+    return res.status(200).json({ success: true, timestamp, count: memberCount });
   } catch (err) {
     console.error('Database insertion error:', err);
     // Ignore error if it's somehow a duplicate timestamp, though rare for ISOString
