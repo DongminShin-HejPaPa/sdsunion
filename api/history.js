@@ -1,6 +1,7 @@
-const { Client } = require('pg');
+import pg from 'pg';
+const { Client } = pg;
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
