@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { 
   AreaChart, 
   Area, 
@@ -6,19 +6,12 @@ import {
   YAxis, 
   CartesianGrid, 
   Tooltip, 
-  ResponsiveContainer,
-  ReferenceLine
+  ResponsiveContainer
 } from 'recharts';
-import { Users, Activity, TrendingUp } from 'lucide-react';
-import { format, subMinutes, subHours, subDays, isSameDay, isSameHour, isSameMinute, parseISO } from 'date-fns';
-import { ko } from 'date-fns/locale';
+import { Users, Activity } from 'lucide-react';
+import { format, subMinutes, parseISO } from 'date-fns';
 import { RefreshCw } from 'lucide-react';
 import './index.css';
-
-// The Google Apps Script URL for real-time count
-const API_URL = "https://script.google.com/macros/s/AKfycbzVncXUtzfxlpmfD0ufVNnXkTcVMCI7-ERzWZZDqiK40Roah1hkxfFq9PIvfjdMwh2seQ/exec";
-// Local DB URL for auto-refreshing UI
-const LOCAL_DB_URL = "/local_db.jsonl";
 
 // 전체 임직원 수 설정 (추후 수정 가능)
 const TOTAL_EMPLOYEES = 11149;
