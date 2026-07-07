@@ -8,7 +8,7 @@ export default async function handler(req, res) {
   }
 
   // 구글 스크립트 API 호출
-  const googleApiUrl = 'https://script.google.com/macros/s/AKfycbz_9zG_9Vj2f5QYl1w8uD9ZqXj9xH5V9_yF2X6o4qP_/exec';
+  const googleApiUrl = 'https://script.google.com/macros/s/AKfycbzVncXUtzfxlpmfD0ufVNnXkTcVMCI7-ERzWZZDqiK40Roah1hkxfFq9PIvfjdMwh2seQ/exec';
   let apiResponse;
   try {
     const response = await fetch(googleApiUrl);
