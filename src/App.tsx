@@ -143,15 +143,12 @@ function App() {
   // Ping for active users
   useEffect(() => {
     let sessionId = sessionStorage.getItem('sds_union_session_id');
+    let isNewVisit = false;
+    
     if (!sessionId) {
       sessionId = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2);
       sessionStorage.setItem('sds_union_session_id', sessionId);
-    }
-
-    const hasVisited = localStorage.getItem('sds_union_visited');
-    const isNewVisit = !hasVisited;
-    if (isNewVisit) {
-      localStorage.setItem('sds_union_visited', 'true');
+      isNewVisit = true;
     }
 
     const ping = async (isNew: boolean) => {
