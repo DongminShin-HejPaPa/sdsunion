@@ -13,6 +13,8 @@ import { format, subMinutes, parseISO } from 'date-fns';
 import { RefreshCw } from 'lucide-react';
 import './index.css';
 
+declare const __BUILD_TIME__: string;
+
 // 전체 임직원 수 설정 (추후 수정 가능)
 const TOTAL_EMPLOYEES = 11149;
 
@@ -26,44 +28,50 @@ type ViewMode = 'minute' | 'hour' | 'day';
 
 
 
-// 로그 함수를 이용한 예상 도달 시간 계산기 (y = a * ln(t) + b)
-const estimateReachTime = (history: DataPoint[], targetCount: number): Date | number | null => {
+// 선형 회귀를 이용한 예상 도달 시간 계산기 (y = ax + b)
+const estimateLinearReachTime = (history: DataPoint[], targetCount: number, hoursLimit: number): Date | number | null => {
   if (history.length < 2) return null;
   
-  const sorted = [...history].sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  const nowMs = new Date().getTime();
+  const limitMs = nowMs - (hoursLimit * 60 * 60 * 1000);
+  
+  // Filter history to only include data within the hoursLimit
+  const filtered = history.filter(d => new Date(d.timestamp).getTime() >= limitMs);
+  
+  if (filtered.length < 2) return null; // Not enough data in the given timeframe
+
+  const sorted = [...filtered].sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   const startTime = new Date(sorted[0].timestamp).getTime();
   
-  let sumLnT = 0;
+  let sumX = 0;
   let sumY = 0;
-  let sumLnT2 = 0;
-  let sumLnTY = 0;
+  let sumX2 = 0;
+  let sumXY = 0;
   let n = sorted.length;
   
   for (const point of sorted) {
-    // 시간을 시간 단위로 환산, 시작점을 t=1로 설정하여 ln(0) 방지
-    const t = (new Date(point.timestamp).getTime() - startTime) / (1000 * 60 * 60) + 1; 
-    const lnT = Math.log(t);
+    // x = hours from start of timeframe
+    const x = (new Date(point.timestamp).getTime() - startTime) / (1000 * 60 * 60); 
     const y = point.count;
     
-    sumLnT += lnT;
+    sumX += x;
     sumY += y;
-    sumLnT2 += lnT * lnT;
-    sumLnTY += lnT * y;
+    sumX2 += x * x;
+    sumXY += x * y;
   }
   
-  const denominator = n * sumLnT2 - sumLnT * sumLnT;
+  const denominator = n * sumX2 - sumX * sumX;
   if (denominator === 0) return null;
   
-  const a = (n * sumLnTY - sumLnT * sumY) / denominator;
-  const b = (sumY - a * sumLnT) / n;
+  const m = (n * sumXY - sumX * sumY) / denominator;
+  const b = (sumY - m * sumX) / n;
   
-  if (a <= 0) return null; // 증가 추세가 아님
+  if (m <= 0) return null; // 감소하거나 멈춰있으면 달성 불가
   
-  const targetLnT = (targetCount - b) / a;
-  if (targetLnT > 100) return Infinity; // 너무 먼 미래
+  const targetX = (targetCount - b) / m;
+  if (targetX > 24 * 365) return Infinity; // 너무 먼 미래 (1년 이상)
   
-  const targetT = Math.exp(targetLnT);
-  const targetTimeMs = startTime + (targetT - 1) * 1000 * 60 * 60;
+  const targetTimeMs = startTime + (targetX * 1000 * 60 * 60);
   
   return new Date(targetTimeMs);
 };
@@ -205,11 +213,11 @@ function App() {
     return <span>{displayValue.toLocaleString()}</span>;
   };
 
-  const getFormattedEstimate = (targetCount: number) => {
+  const getFormattedEstimate = (targetCount: number, hoursLimit: number) => {
     if (memberCount !== null && memberCount >= targetCount) return '🎉 이미 달성!';
     if (history.length < 2) return '계산 중...';
     
-    const estimate = estimateReachTime(history, targetCount);
+    const estimate = estimateLinearReachTime(history, targetCount, hoursLimit);
     if (estimate === null) return '계산 불가';
     if (estimate === Infinity || (estimate instanceof Date && estimate.getTime() > new Date().getTime() + 1000 * 60 * 60 * 24 * 365 * 10)) {
       return '아득히 먼 미래 😢';
@@ -245,8 +253,8 @@ function App() {
   return (
     <div className="app-container">
       <div className="header fade-in delay-1">
-        <h1 className="title">SDS 노조 가입 현황</h1>
-        <p className="subtitle">어제부터 시작된 우리의 새로운 발걸음 🚀</p>
+        <h1 className="title">삼성SDS노동조합 가입 현황</h1>
+        <p className="subtitle">이제부터 시작되는 우리의 새로운 발걸음 🚀</p>
       </div>
 
       <div className="glass-panel fade-in delay-2">
@@ -285,13 +293,13 @@ function App() {
           </div>
           <div className="stat-card">
             <h3>50% 달성 ({target50Count.toLocaleString()}명)</h3>
-            <div className="stat-value">{getFormattedEstimate(target50Count)}</div>
-            <div className="stat-sub">예상 시기 (로그 근사)</div>
+            <div className="stat-value">{getFormattedEstimate(target50Count, 6)}</div>
+            <div className="stat-sub">예상 시기 (최근 6시간 기준)</div>
           </div>
           <div className="stat-card">
             <h3>90% 달성 ({target90Count.toLocaleString()}명)</h3>
-            <div className="stat-value">{getFormattedEstimate(target90Count)}</div>
-            <div className="stat-sub">예상 시기 (로그 근사)</div>
+            <div className="stat-value">{getFormattedEstimate(target90Count, 24)}</div>
+            <div className="stat-sub">예상 시기 (최근 24시간 기준)</div>
           </div>
         </div>
       </div>
@@ -333,6 +341,7 @@ function App() {
                   dataKey="time" 
                   type="number"
                   domain={['dataMin', 'dataMax']}
+                  ticks={viewMode === 'day' ? chartData.map(d => d.time) : undefined}
                   axisLine={false} 
                   tickLine={false} 
                   tick={{ fill: 'var(--text-muted)', fontSize: 12 }} 
@@ -347,7 +356,7 @@ function App() {
                   axisLine={false} 
                   tickLine={false} 
                   tick={{ fill: 'var(--text-muted)', fontSize: 12 }}
-                  domain={['dataMin - 100', 'dataMax + 100']}
+                  domain={viewMode === 'hour' ? [0, 'auto'] : ['dataMin - 100', 'dataMax + 100']}
                   tickFormatter={(val) => val.toLocaleString()}
                 />
                 <Tooltip content={<CustomTooltip />} />
@@ -373,7 +382,7 @@ function App() {
       <div className="footer fade-in delay-3">
         <div className="footer-content">
           <span>Made by 밐희</span>
-          {lastUpdated && <span>Last Updated: {format(lastUpdated, 'MM/dd HH:mm')}</span>}
+          <span>Last Developed: {format(new Date(__BUILD_TIME__), 'MM/dd HH:mm')}</span>
         </div>
       </div>
     </div>
