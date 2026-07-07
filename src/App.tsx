@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import type { FormEvent } from 'react';
 import { 
   AreaChart, 
   Area, 
@@ -25,6 +26,33 @@ type DataPoint = {
 };
 
 type ViewMode = 'minute' | 'hour' | 'day';
+
+type Comment = {
+  id: number;
+  author: string;
+  content: string;
+  created_at: string;
+};
+
+// KST(한국 표준시)로 작성 시간 포맷팅
+const formatKST = (isoString: string): string => {
+  try {
+    const date = new Date(isoString);
+    const parts = new Intl.DateTimeFormat('ko-KR', {
+      timeZone: 'Asia/Seoul',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).formatToParts(date);
+    const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+    return `${get('year')}.${get('month')}.${get('day')} ${get('hour')}:${get('minute')} (KST)`;
+  } catch {
+    return isoString;
+  }
+};
 
 
 
@@ -133,6 +161,60 @@ function App() {
 
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  // 방명록(자유 코멘트)
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [commentAuthor, setCommentAuthor] = useState('');
+  const [commentContent, setCommentContent] = useState('');
+  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+  const [commentError, setCommentError] = useState<string | null>(null);
+
+  const fetchComments = async () => {
+    try {
+      const res = await fetch(`/api/comments?t=${new Date().getTime()}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) setComments(data);
+      }
+    } catch (err) {
+      console.error('Error fetching comments:', err);
+    }
+  };
+
+  const handleSubmitComment = async (e: FormEvent) => {
+    e.preventDefault();
+    const author = commentAuthor.trim();
+    const content = commentContent.trim();
+
+    if (!author || !content) {
+      setCommentError('작성자와 내용을 모두 입력해주세요.');
+      return;
+    }
+
+    setIsSubmittingComment(true);
+    setCommentError(null);
+
+    try {
+      const res = await fetch('/api/comments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ author, content }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || '등록에 실패했습니다. 잠시 후 다시 시도해주세요.');
+      }
+
+      const newComment: Comment = await res.json();
+      setComments((prev) => [newComment, ...prev]);
+      setCommentContent('');
+    } catch (err) {
+      setCommentError(err instanceof Error ? err.message : '등록에 실패했습니다.');
+    } finally {
+      setIsSubmittingComment(false);
+    }
+  };
+
   const fetchData = async (isInitial = false) => {
     try {
       if (!isInitial) {
@@ -180,7 +262,8 @@ function App() {
     }
     
     fetchData(true);
-    
+    fetchComments();
+
     // Poll every 1 minute for history
     const intervalId = setInterval(() => fetchData(), 60000);
     return () => clearInterval(intervalId);
@@ -487,6 +570,63 @@ function App() {
               <Activity className="animate-spin" style={{ marginRight: '10px' }}/> 데이터를 불러오는 중...
             </div>
           )}
+        </div>
+      </div>
+
+      <div className="glass-panel fade-in delay-3">
+        <div className="comments-section">
+          <h2 className="comments-title">💬 자유 게시판</h2>
+
+          <div className="comments-notice">
+            <strong>📌 게시판 이용 안내</strong>
+            <p>
+              본 게시판은 <strong>수정 및 삭제가 불가능</strong>합니다. 신중하게 작성해 주세요.
+              또한 <strong>욕설·비방·정치·인종 차별적인 글</strong> 등 부적절한 게시물은
+              관리자에 의해 <strong>예고 없이 삭제</strong>될 수 있습니다.
+              서로를 존중하는 따뜻한 공간을 함께 만들어 주세요. 🙏
+            </p>
+          </div>
+
+          <form className="comment-form" onSubmit={handleSubmitComment}>
+            <input
+              type="text"
+              className="comment-author-input"
+              placeholder="작성자"
+              value={commentAuthor}
+              onChange={(e) => setCommentAuthor(e.target.value)}
+              maxLength={20}
+              disabled={isSubmittingComment}
+            />
+            <textarea
+              className="comment-content-input"
+              placeholder="따뜻한 응원의 한마디를 남겨주세요 :)"
+              value={commentContent}
+              onChange={(e) => setCommentContent(e.target.value)}
+              maxLength={500}
+              rows={3}
+              disabled={isSubmittingComment}
+            />
+            {commentError && <div className="comment-error">{commentError}</div>}
+            <button type="submit" className="comment-submit-btn" disabled={isSubmittingComment}>
+              {isSubmittingComment ? '게시 중...' : '게시하기'}
+            </button>
+          </form>
+
+          <div className="comment-list">
+            {comments.length === 0 ? (
+              <div className="comment-empty">아직 등록된 글이 없어요. 첫 번째 글을 남겨보세요! ✍️</div>
+            ) : (
+              comments.map((c) => (
+                <div className="comment-item" key={c.id}>
+                  <div className="comment-item-header">
+                    <span className="comment-item-author">{c.author}</span>
+                    <span className="comment-item-time">{formatKST(c.created_at)}</span>
+                  </div>
+                  <p className="comment-item-content">{c.content}</p>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       </div>
 
