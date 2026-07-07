@@ -251,16 +251,20 @@ function App() {
   };
 
   const getFormattedEstimate = (targetCount: number, hoursLimit: number) => {
-    if (memberCount !== null && memberCount >= targetCount) return '🎉 이미 달성!';
-    if (history.length < 2) return '계산 중...';
+    if (memberCount !== null && memberCount >= targetCount) {
+      const achievedPoint = history.find(d => d.count >= targetCount);
+      const achievedTimeStr = achievedPoint ? format(parseISO(achievedPoint.timestamp), 'yy.MM.dd HH:mm') : '알 수 없음';
+      return { achieved: true, text: `🎉 달성 완료!`, subText: `${achievedTimeStr}` };
+    }
+    if (history.length < 2) return { achieved: false, text: '계산 중...', subText: `예상 시기 (최근 ${hoursLimit}시간 기준)` };
     
     const estimate = estimateLinearReachTime(history, targetCount, hoursLimit);
-    if (estimate === null) return '계산 불가';
+    if (estimate === null) return { achieved: false, text: '계산 불가', subText: `예상 시기 (최근 ${hoursLimit}시간 기준)` };
     if (estimate === Infinity || (estimate instanceof Date && estimate.getTime() > new Date().getTime() + 1000 * 60 * 60 * 24 * 365 * 10)) {
-      return '아득히 먼 미래 😢';
+      return { achieved: false, text: '아득히 먼 미래 😢', subText: `예상 시기 (최근 ${hoursLimit}시간 기준)` };
     }
     
-    return format(estimate as Date, 'yyyy.MM.dd HH:mm');
+    return { achieved: false, text: format(estimate as Date, 'yyyy.MM.dd HH:mm'), subText: `예상 시기 (최근 ${hoursLimit}시간 기준)` };
   };
 
   const currentRate = memberCount ? ((memberCount / TOTAL_EMPLOYEES) * 100).toFixed(1) : "0.0";
@@ -328,6 +332,7 @@ function App() {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(132,94,194,0.1)', color: 'var(--secondary-color)', padding: '6px 14px', borderRadius: '20px', fontSize: '0.9rem', fontWeight: 700, letterSpacing: '-0.5px' }}>
               👁️ 누적 방문 {totalViews.toLocaleString()}명
+              <span style={{ fontSize: '0.75rem', fontWeight: 500, opacity: 0.7, marginLeft: '2px' }}>(7/7 18:00 부터)</span>
             </div>
           </div>
         </div>
@@ -338,16 +343,28 @@ function App() {
             <div className="stat-value">{currentRate}%</div>
             <div className="stat-sub">({memberCount?.toLocaleString()} / {TOTAL_EMPLOYEES.toLocaleString()}명)</div>
           </div>
-          <div className="stat-card">
-            <h3>50% 달성 ({target50Count.toLocaleString()}명)</h3>
-            <div className="stat-value">{getFormattedEstimate(target50Count, 6)}</div>
-            <div className="stat-sub">예상 시기 (최근 6시간 기준)</div>
-          </div>
-          <div className="stat-card">
-            <h3>90% 달성 ({target90Count.toLocaleString()}명)</h3>
-            <div className="stat-value">{getFormattedEstimate(target90Count, 24)}</div>
-            <div className="stat-sub">예상 시기 (최근 24시간 기준)</div>
-          </div>
+          
+          {(() => {
+            const est50 = getFormattedEstimate(target50Count, 6);
+            return (
+              <div className={`stat-card ${est50.achieved ? 'achieved' : ''}`}>
+                <h3>50% 달성 ({est50.achieved ? '완료' : `${(target50Count - (memberCount || 0)).toLocaleString()}명 남음`})</h3>
+                <div className="stat-value">{est50.text}</div>
+                <div className="stat-sub">{est50.subText}</div>
+              </div>
+            );
+          })()}
+          
+          {(() => {
+            const est90 = getFormattedEstimate(target90Count, 24);
+            return (
+              <div className={`stat-card ${est90.achieved ? 'achieved' : ''}`}>
+                <h3>90% 달성 ({est90.achieved ? '완료' : `${(target90Count - (memberCount || 0)).toLocaleString()}명 남음`})</h3>
+                <div className="stat-value">{est90.text}</div>
+                <div className="stat-sub">{est90.subText}</div>
+              </div>
+            );
+          })()}
         </div>
       </div>
 
