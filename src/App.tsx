@@ -76,6 +76,52 @@ const estimateLinearReachTime = (history: DataPoint[], targetCount: number, hour
   return new Date(targetTimeMs);
 };
 
+// 로그 근사를 이용한 예상 도달 시간 계산기 (y = a * ln(t+1) + b)
+const estimateLogarithmicReachTime = (history: DataPoint[], targetCount: number, hoursLimit: number): Date | number | null => {
+  if (history.length < 2) return null;
+  
+  const nowMs = new Date().getTime();
+  const limitMs = nowMs - (hoursLimit * 60 * 60 * 1000);
+  
+  const filtered = history.filter(d => new Date(d.timestamp).getTime() >= limitMs);
+  if (filtered.length < 2) return null;
+
+  const sorted = [...filtered].sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  const startTime = new Date(sorted[0].timestamp).getTime();
+  
+  let sumX = 0;
+  let sumY = 0;
+  let sumX2 = 0;
+  let sumXY = 0;
+  let n = sorted.length;
+  
+  for (const point of sorted) {
+    const t = (new Date(point.timestamp).getTime() - startTime) / (1000 * 60 * 60);
+    const x = Math.log(t + 1); // +1 to avoid log(0)
+    const y = point.count;
+    
+    sumX += x;
+    sumY += y;
+    sumX2 += x * x;
+    sumXY += x * y;
+  }
+  
+  const denominator = n * sumX2 - sumX * sumX;
+  if (denominator === 0) return null;
+  
+  const a = (n * sumXY - sumX * sumY) / denominator;
+  const b = (sumY - a * sumX) / n;
+  
+  if (a <= 0) return null; // 감소하거나 멈춰있으면 달성 불가
+  
+  const targetT = Math.exp((targetCount - b) / a) - 1;
+  if (targetT > 24 * 365) return Infinity; // 너무 먼 미래
+  
+  const targetTimeMs = startTime + (targetT * 1000 * 60 * 60);
+  
+  return new Date(targetTimeMs);
+};
+
 function App() {
   const [memberCount, setMemberCount] = useState<number | null>(null);
   const [history, setHistory] = useState<DataPoint[]>([]);
@@ -247,21 +293,25 @@ function App() {
     return <span>{displayValue.toLocaleString()}</span>;
   };
 
-  const getFormattedEstimate = (targetCount: number, hoursLimit: number) => {
+  const getFormattedEstimate = (targetCount: number, hoursLimit: number, useLog = false) => {
     if (memberCount !== null && memberCount >= targetCount) {
       const achievedPoint = history.find(d => d.count >= targetCount);
       const achievedTimeStr = achievedPoint ? format(parseISO(achievedPoint.timestamp), 'yy.MM.dd HH:mm') : '알 수 없음';
       return { achieved: true, text: `🎉 달성 완료!`, subText: `${achievedTimeStr}` };
     }
-    if (history.length < 2) return { achieved: false, text: '계산 중...', subText: `예상 시기 (최근 ${hoursLimit}시간 기준)` };
     
-    const estimate = estimateLinearReachTime(history, targetCount, hoursLimit);
-    if (estimate === null) return { achieved: false, text: '계산 불가', subText: `예상 시기 (최근 ${hoursLimit}시간 기준)` };
+    const subTextStr = useLog ? `예상 시기 (최근 ${hoursLimit}시간 로그 추세)` : `예상 시기 (최근 ${hoursLimit}시간 기준)`;
+    
+    if (history.length < 2) return { achieved: false, text: '계산 중...', subText: subTextStr };
+    
+    const estimate = useLog ? estimateLogarithmicReachTime(history, targetCount, hoursLimit) : estimateLinearReachTime(history, targetCount, hoursLimit);
+    
+    if (estimate === null) return { achieved: false, text: '계산 불가', subText: subTextStr };
     if (estimate === Infinity || (estimate instanceof Date && estimate.getTime() > new Date().getTime() + 1000 * 60 * 60 * 24 * 365 * 10)) {
-      return { achieved: false, text: '아득히 먼 미래 😢', subText: `예상 시기 (최근 ${hoursLimit}시간 기준)` };
+      return { achieved: false, text: '아득히 먼 미래 😢', subText: subTextStr };
     }
     
-    return { achieved: false, text: format(estimate as Date, 'yyyy.MM.dd HH:mm'), subText: `예상 시기 (최근 ${hoursLimit}시간 기준)` };
+    return { achieved: false, text: format(estimate as Date, 'yyyy.MM.dd HH:mm'), subText: subTextStr };
   };
 
   const currentRate = memberCount ? ((memberCount / TOTAL_EMPLOYEES) * 100).toFixed(1) : "0.0";
@@ -353,7 +403,7 @@ function App() {
           })()}
           
           {(() => {
-            const est90 = getFormattedEstimate(target90Count, 24);
+            const est90 = getFormattedEstimate(target90Count, 24, true);
             return (
               <div className={`stat-card ${est90.achieved ? 'achieved' : ''}`}>
                 <h3>90% 달성 ({est90.achieved ? '완료' : `${(target90Count - (memberCount || 0)).toLocaleString()}명 남음`})</h3>
