@@ -263,10 +263,10 @@ function App() {
     
     fetchData(true);
     fetchComments();
-
-    // Poll every 1 minute for history
-    const intervalId = setInterval(() => fetchData(), 60000);
-    return () => clearInterval(intervalId);
+    
+    // Poll every 1 minute for history (Temporarily disabled)
+    // const intervalId = setInterval(() => fetchData(), 60000);
+    // return () => clearInterval(intervalId);
   }, []);
 
   // Ping for active users
